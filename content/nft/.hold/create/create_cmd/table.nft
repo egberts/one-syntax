@@ -1,0 +1,15 @@
+
+add table T
+delete table T
+
+table T2
+delete table T2
+
+# add T3
+# delete table T3
+
+create table T4
+delete table T4
+
+create table T5 { comment "Testing 1 2 3"; };
+delete table T5
