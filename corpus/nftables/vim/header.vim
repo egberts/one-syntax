@@ -1,18 +1,4 @@
-" Vim syntax file for nftables configuration file
-" Language:     nftables configuration file
-" Maintainer:   egberts <egberts@github.com>
-" Revision:     1.1
-" Initial Date: 2020-04-24
-" Last Change:  2025-01-19
-" Filenames:    nftables.conf, *.nft
-" Location:     https://github.com/egberts/vim-nftables
-" License:      MIT license
-" Remarks:
-" Bug Report:   https://github.com/egberts/vim-nftables/issues
-"
-"  WARNING:  Do not use 'containedin=', computationally expensive.
-"  WARNING:  Do not add online comments using a double-quote, it ALTERS patterns
-"
+" one-syntax/corpus/nftables/vim/header.vim begins here
 "
 "  ~/.vimrc flags used:
 "
@@ -72,11 +58,6 @@ endif
 "    finish
 "endif
 "let g:loaded_syntax_nftables = 1
-
-" quit if terminal is a black and white
-if &t_Co <= 1
-  finish
-endif
 
 " .vimrc variable to disable html highlighting
 if exists('g:nftables_syntax_disabled')
@@ -149,12 +130,6 @@ endif
 
 " For version 6.x: Quit when a syntax file was already loaded
 if !exists('main_syntax')
-  if v:version < 600
-    syntax clear
-  elseif exists('b:current_syntax')
-   " Quit when a (custom) syntax file was already loaded
-    finish
-  endif
   let main_syntax = 'nftables'
 endif
 
@@ -174,8 +149,6 @@ if exists('nft_debug') && nft_debug == 1
 "    endif
 "  endif
 endif
-
-syn case match
 
 " Define the default highlighting.
 " For version 5.7 and earlier: only when not done already
@@ -211,12 +184,6 @@ endif
 " setlocal iskeyword=.,48-58,A-Z,a-z,\_,\/,-
 setlocal isident=.,48-58,A-Z,a-z,\_
 
-let s:cpo_save = &cpoptions
-set cpoptions&vim  " Line continuation '\' at EOL is used here
-set cpoptions-=C
-
-syn sync clear
-syn sync maxlines=1000
 syn sync match nftablesSync grouphere NONE '^(rule|add {1,15}rule|table|chain|set)'
 " syn sync fromstart '^(monitor|table|set)'
 " syn sync fromstart
