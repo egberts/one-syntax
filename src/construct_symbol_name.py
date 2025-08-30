@@ -27,7 +27,7 @@ def convert(previous_name: str, name: str) -> str:
     return name
 
 
-def get(stack: Sequence[Any], prefix: str) -> str:
+def get_dir(stack: Sequence[Any], prefix: str) -> str:
     """
     Construct a snake_case symbol/group name string from a parsing stack.
 
@@ -36,9 +36,9 @@ def get(stack: Sequence[Any], prefix: str) -> str:
     :return: A constructed symbol name string.
     :raises ValueError: If the stack is invalid (e.g., starts with '{').
     """
-    # If too short, just return the prefix
-    if len(stack) <= 1:
-        return prefix
+    # If too short, a simple quit with an empty string shall suffice
+    #if len(stack) <= 1:  # i think this is no longer needed now that root node has its own traversal function
+    #    return ''
 
     names = []
     parent_name = ''
@@ -47,6 +47,8 @@ def get(stack: Sequence[Any], prefix: str) -> str:
         name = getattr(item, "name", None)
         if not name:
             raise ValueError("Stack item missing 'name' attribute")
+        if len(name) == 0:
+            raise ValueError("Empty name!")
 
         converted_name = convert(parent_name, name)
         if name.isupper():
@@ -60,4 +62,54 @@ def get(stack: Sequence[Any], prefix: str) -> str:
         parent_name = snake_case_name
 
     # Safely join prefix and names (avoid duplicate underscores)
-    return prefix.rstrip('_') + '_' + '_'.join(names)
+    if len(names) == 0:
+        list_of_syms = ''
+    else:
+        list_of_syms = '_' + '_'.join(names)
+
+    # Safely join prefix and names (avoid duplicate underscores)
+    return prefix.rstrip('_') + list_of_syms
+
+
+def get_file(stack: Sequence[Any], filename2: str, prefix: str) -> str:
+    """
+    Construct a snake_case symbol/group name string from a parsing stack.
+
+    :param filename:
+    :param stack: A sequence of parsed tokens/nodes (each must have a `.name` attribute).
+    :param prefix: A string prefix (e.g., 'nft_' for Vimscript group names).
+    :return: A constructed symbol name string.
+    :raises ValueError: If the stack is invalid (e.g., starts with '{').
+    """
+    # If too short, a simple quit with an empty string shall suffice
+    #if len(stack) <= 1:  # i think this is no longer needed now that root node has its own traversal function
+    #    return ''
+
+    names = []
+    parent_name = ''
+
+    for item in list(stack)[1:]:
+        name = getattr(item, "name", None)
+        if not name:
+            raise ValueError("Stack item missing 'name' attribute")
+        if len(name) == 0:
+            raise ValueError("Empty name!")
+
+        converted_name = convert(parent_name, name)
+        if name.isupper():
+            # Preserve all-uppercase names (TABLE, CHAIN, etc.)
+            snake_case_name = '_' + converted_name
+        else:
+            # Normalize to snake_case: lowercased, non-alphanumerics → underscores
+            snake_case_name = re.sub(r'[^a-zA-Z0-9]+', '_', converted_name.lower()).strip('_')
+
+        names.append(snake_case_name)
+        parent_name = snake_case_name
+
+    if len(names) == 0:
+        list_of_syms = ''
+    else:
+        list_of_syms = '_' + '_'.join(names)
+
+    # Safely join prefix and names (avoid duplicate underscores)
+    return prefix.rstrip('_') + list_of_syms + '_' + filename2
