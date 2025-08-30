@@ -1,5 +1,5 @@
 """
-The Right Stuff
+Test Vimscript Generator
 """
 from pathlib import Path
 from collections import deque
@@ -35,7 +35,7 @@ def process_node_simple_no_config(parent_entry, entry, symbol_name, stack):
     print("Non-terminal symbol (dir/no-config): %s" % symbol_name)
 
 
-def start_directory_traverse(start_dir, hidden_prefix=Path("."), prefix='nft_'):
+def traverse_dirs(start_dir, hidden_prefix=Path("."), prefix='nft_'):
     """
 
     :param start_dir:
@@ -43,14 +43,31 @@ def start_directory_traverse(start_dir, hidden_prefix=Path("."), prefix='nft_'):
     :param prefix:
     :return:
     """
-    def traverse_recursively(path, stack=deque()):
+    def process_non_terminal_symbol(parent_entry, entry, symbol_name, stack):
+        """
+
+        :param parent_entry:
+        :param entry:
+        :param symbol_name:
+        :param stack:
+        """
+        entry_symbol_name = symbol_name + '_' + construct_symbol_name.convert(parent_entry.name, entry.name)
+        node_options = parse_simple_ini.get_node_options(entry)
+        if not node_options:
+            # it is a simple EBNF symbol
+            process_node_simple_no_config(parent_entry, entry, entry_symbol_name, stack)
+        else:
+            print("Non-terminal symbol (dir/config): %s" % entry_symbol_name)
+
+        recursive_traverse(entry, stack)
+
+
+    def process_node(path, stack, settings):
         """
 
         :param path:
         :param stack:
         """
-        stack.append(path)
-        keyword_config = parse_simple_ini.get_node_options(path)
         try:
             for entry in path.iterdir():
                 # Hide those dot-files (we can open those later)
@@ -62,43 +79,38 @@ def start_directory_traverse(start_dir, hidden_prefix=Path("."), prefix='nft_'):
                 # Hide those configuration files
                 if entry.name.startswith('.config'):
                     continue
-
-                traverse_recursively(entry, stack)
                 full_symbol_name = construct_symbol_name.get(stack, prefix)
-                
-                # for reverse (not recursive) traverse, do things after traverse_recursively()
                 if entry.is_file():
                     process_terminal_token_end_node(entry, full_symbol_name, stack)
 
                 elif entry.is_dir():
-                    entry_symbol_name = full_symbol_name + '_' + construct_symbol_name.convert(path.name, entry.name)
-                    node_options = parse_simple_ini.get_node_options(entry)
-                    if not node_options:
-                        # it is a simple EBNF symbol
-                        process_node_simple_no_config(path, entry, entry_symbol_name, stack)
-                    else:
-                        print("Non-terminal symbol (dir/config): %s" % entry_symbol_name)
-
+                    process_non_terminal_symbol(path, entry, full_symbol_name, stack)
 
         except PermissionError:
             print("  Permission denied: %s" % path.name)
         stack.pop()
 
-    # Run start_directory_traverse() with pathspec to its top-level directory
+    def recursive_traverse(path, stack=deque()):
+        """
+
+        :param path:
+        :param stack:
+        """
+        stack.append(path)
+        keyword_config = parse_simple_ini.get_node_options(path)
+        process_node(path, stack, keyword_config)
+
+
     start_path = Path(start_dir).resolve()  # Convert to Path and resolve
-    if start_path.is_file():
-        print("Path %s is a file, not a directory; aborted." % start_path.name)
-        return
     if not start_path.is_dir():
         print("Path %s is not a directory; aborted." % start_path.name)
         return
-
-    traverse_recursively(start_path)
-    # last node traversed here, what's next?
+    if start_path.is_file():
+        print("Path %s is a file, not a directory; aborted." % start_path.name)
+        return
+    recursive_traverse(start_path)
 
 # Run traverse_dirs with pathspec
 options = parse_simple_ini.get_main_options(Path(INI_DIRPATH))
 symbol_prefix = options.get('symbol_name_prefix', 'nft_')  # Fallback to 'nft_' if not found
-
-# Do top-level differently than rest of tree-traversing
-start_directory_traverse(pathspec, symbol_prefix)
+traverse_dirs(pathspec, symbol_prefix)
