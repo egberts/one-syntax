@@ -24,6 +24,10 @@ def convert(previous_name: str, name: str) -> str:
     if len(name) == 1:
         if name == '{':
             return previous_name.lower() + '_block'
+        if name == '=':
+            return 'equal'
+        if name == '#':
+            return 'hash'
     return name
 
 

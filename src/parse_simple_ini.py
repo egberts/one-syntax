@@ -32,6 +32,7 @@ valid_main_options = {
 }
 
 valid_node_options = {
+    'pattern',
     'highlight_color_name',
     'squishable_with_next_token',
     'follow_on_to_only',
@@ -87,8 +88,11 @@ def get_node_options(path: pathlib):
     for this_node_option in retrieved_node_config_options:
         if this_node_option not in valid_node_options:
             raise ValueError(f"Invalid option '{this_node_option}' in config {node_config_filespec} file.")
-        # Validate further
-        for this_follow_on in retrieved_node_config_options['follow_on_to_only'].split(","):
-            if this_follow_on not in valid_node_follow_on_options:
-                raise ValueError(f"Invalid follow-on token '{this_follow_on}' in config {node_config_filespec} file.")
+
+    if 'follow_on_to_only' in retrieved_node_config_options:
+        if retrieved_node_config_options['follow_on_to_only']:
+            # Validate further
+            for this_follow_on in retrieved_node_config_options['follow_on_to_only'].split(","):
+                if this_follow_on not in valid_node_follow_on_options:
+                    raise ValueError("Invalid follow-on token " + this_follow_on + " in config " + str(node_config_filespec) +" file.")
     return retrieved_node_config_options
