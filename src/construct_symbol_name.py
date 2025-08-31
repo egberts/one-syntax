@@ -28,6 +28,10 @@ def convert(previous_name: str, name: str) -> str:
             return 'equal'
         if name == '#':
             return 'hash'
+        if name == '[':
+            return 'lbracket'
+        if name == ']':
+            return 'rbracket'
     return name
 
 
@@ -79,7 +83,7 @@ def get_file(stack: Sequence[Any], filename2: str, prefix: str) -> str:
     """
     Construct a snake_case symbol/group name string from a parsing stack.
 
-    :param filename:
+    :param filename2:
     :param stack: A sequence of parsed tokens/nodes (each must have a `.name` attribute).
     :param prefix: A string prefix (e.g., 'nft_' for Vimscript group names).
     :return: A constructed symbol name string.
