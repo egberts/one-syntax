@@ -407,14 +407,14 @@ def main() -> None:
     else:
         template_dirpath = template_dirpath_relative
     if not template_dirpath.is_dir():
-        raise ArgumentTypeError('Template \'' + str(corpus_dirpath) + '\' is not a subdirectory')
+        raise ArgumentTypeError('Template \'' + str(template_dirpath) + '\' is not a subdirectory')
 
     if args.output:
         output_dirpath = args.output
     else:
         output_dirpath = output_dirpath_relative
     if not output_dirpath.is_dir():
-        raise ArgumentTypeError('Output \'' + str(corpus_dirpath) + '\' is not a subdirectory')
+        raise ArgumentTypeError('Output \'' + str(output_dirpath) + '\' is not a subdirectory')
 
     # Map out remaining tree pathways (noticed no '_relative' nor absolute notation)
     corpus_fileformat_dirpath = corpus_dirpath / Path(file_format_name)
