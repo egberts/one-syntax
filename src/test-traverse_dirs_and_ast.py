@@ -1,30 +1,34 @@
 """
 The Right Stuff
 """
+from argparse import ArgumentTypeError
 from collections import deque
 from pathlib import Path
 
 import construct_symbol_name
 import parse_simple_ini
 
-highlights_found = []
-errors_defined = []
+symbol_prefix = ''
+file_format_name = ''
+editor_platform_target = 'vim'
 
 # Define pathspec for directory traversal
-INI_DIRPATH = './'
-pathspec = Path('./.')  # Define pathspec
+CORPUS_SYNTAX_TREE_DIRPATH = '/home/wolfe/work/github/one-syntax/'
 
 
+# Need to place highlight labels firstly
+# Need to place error handling labels firstly
+errors_defined = []
+highlights_found = []
 highlights_printed = []
 
 
-def is_root_node(stack: object) -> bool:
+def is_root_node(stack: dict) -> bool:
     """
-
+    Check if a node is the root of the syntax tree
     :param stack:
-    :return:
     :rtype: bool
-    :return:
+    :return: Returns True if a given node is the tree root
     """
     if len(stack) == 1:
         return True
@@ -32,8 +36,9 @@ def is_root_node(stack: object) -> bool:
 
 def output_vimscript_comment(comment_line: str) -> None:
     """
-
+    Generate a Vimscript comment line
     :param comment_line:
+    :ptype comment_line: str
     :rtype: None
     """
     # iterate and collect name of next keywords
@@ -42,10 +47,12 @@ def output_vimscript_comment(comment_line: str) -> None:
 
 def output_highlights_found() -> None:
     """
-    Output a list of highlight group name found in .config.ini files.
+    Output a list of highlight group name found in all the
+    .config.ini files of a syntax tree.
+    Output each line as a definition statement in Vimscript
     :rtype: None
     """
-    output_vimscript_comment(' Highlights found')
+    output_vimscript_comment('Highlights found:')
     for this_highlight in highlights_found:
         group_name = this_highlight[0]
         label_name = this_highlight[1]
@@ -68,24 +75,46 @@ def output_error_labels_defined() -> None:
         print('syntax match ' + group_name + ' \'' + pattern + '\' contained')
 
 
-def any_child_node_exists(path: Path) -> bool:
+def any_child_node_exists(node_path: Path) -> bool:
     """
-
-    :param path:
-    :return:
+    Check a node if any child node exists.
+    :param node_path: a filepath to a node
+    :ptype path: Path
+    :return: Returns True if a child node exists.
     :rtype: bool
     """
     found = False
-    for this_child in path.iterdir():
-        if this_child.is_dir():
-            found = True
-            break
+    for this_child in node_path.iterdir():
+        # we are looking for ordinary (non-block) child nodes
+        if not this_child.name.startswith('block_'):
+            if this_child.is_dir():
+                found = True
+                break
+    return found
+
+def any_block_related_child_node_exists(node_path: Path) -> bool:
+    """
+    Check a node if any block-related child node exists.
+    :param node_path: a filepath to a node
+    :ptype path: Path
+    :return: Returns True if a child node exists.
+    :rtype: bool
+    """
+    found = False
+    for this_child in node_path.iterdir():
+        # we are only looking for block-related child nodes
+        if this_child.name.startswith('block_'):
+            if this_child.is_dir():
+                found = True
+                break
     return found
 
 
 def process_terminal_token_end_node(symbol_name: str) -> None:
     """
-    :param symbol_name:
+    We are at the terminal end of a "AST"; process end-node.
+    :param symbol_name: group name
+    :ptype symbol_name: str
     :rtype: None
     """
     #    print("  File: %s" % entry.name)
@@ -96,12 +125,12 @@ def process_terminal_token_end_node(symbol_name: str) -> None:
 
 def output_vimscript_highlight(symbol_name: str, highlight_link_label: str) -> None:
     """
-
-    :param symbol_name:
+    Generate a Vimscript highlight command
+    :param symbol_name: The group name to be highlighted
     :param highlight_link_label:
     :rtype: None
     """
-    group_name = symbol_prefix.rstrip('_') + 'HL_' + highlight_link_label
+    group_name = file_format_name.rstrip('_') + 'HL_' + highlight_link_label
     # iterate and collect name of next keywords
     print("highlight link %s %s" % (symbol_name, group_name))
     # print("highlight link %s %s" % (group_name, highlight_link_label))
@@ -229,7 +258,7 @@ def process_node_nonterminal(parent_path: Path, path: Path, parent_symbol_name: 
         output_vimscript_comment("Non-terminal symbol (dir): ' + symbol_name + ' (has .config.ini; pattern: " + pattern)
     else:
         output_vimscript_comment("Non-terminal symbol (dir): %s" % path.name)
-    output_vimscript_comment(path)
+    output_vimscript_comment(str(path))
     if 'highlight_color_name' in node_options:
         output_vimscript_highlight(symbol_name, node_options['highlight_color_name'])
 
@@ -274,7 +303,7 @@ def process_end_node_terminal(parent_path: Path, path: Path, parent_symbol_name:
 def start_directory_traverse(start_dir: object, hidden_prefix: Path = Path("."), prefix: str = 'nft_') -> None:
     """
 
-    :return:
+    :return: None
     :param start_dir:
     :param hidden_prefix:
     :param prefix:
@@ -313,7 +342,7 @@ def start_directory_traverse(start_dir: object, hidden_prefix: Path = Path("."),
                     else:
                         process_end_node_terminal(path, entry, full_symbol_name, entry_symbol_name, stack)
                 elif entry.is_file():
-                    raise NotADirectoryError('Not sure what to do with this file')  # not sure
+                    raise NotADirectoryError('Not sure what to do with this file', entry, ": try cd into directory containing 'syntax-tree'")  # not sure
                     full_symbol_name = construct_symbol_name.get_file(stack, path.name, prefix)
                     process_terminal_token_end_node(full_symbol_name)
 
@@ -334,17 +363,93 @@ def start_directory_traverse(start_dir: object, hidden_prefix: Path = Path("."),
     # last node traversed here, what's next?
 
 
-# Retrieve options from root 'syntax-tree/.config.main.ini
-options = parse_simple_ini.get_main_options(Path(INI_DIRPATH))
+import argparse
 
-# set our first global options
-symbol_prefix = options.get('symbol_name_prefix', 'nft_')  # Fallback to 'nft_' if not found
+def parse_args():
+    parser = argparse.ArgumentParser(description='Process input and output files.')
+    parser.add_argument('-f', '--file-type', type=str, required=True, help='Type of file format')
+    parser.add_argument('-b', '--base-path', type=Path, required=False, default=CORPUS_SYNTAX_TREE_DIRPATH, help='Base directory path (default is $CWD)')
+    parser.add_argument('-c', '--corpus', type=Path, required=False, help='Directory to corpus of syntax tree')
+    parser.add_argument('-t', '--template', type=Path, required=False, help='Template file path')
+    parser.add_argument('-o', '--output', type=Path, required=False, help='Output file path')
+    return parser.parse_args()
 
-output_vimscript_comment('AUTO-GENERATED BY YOURS TRULY!')
-output_vimscript_comment('AUTO-GENERATED BY YOURS TRULY!')
-output_vimscript_comment('AUTO-GENERATED BY YOURS TRULY!')
-# Do top-level differently than rest of tree-traversing
-start_directory_traverse(pathspec, symbol_prefix)
+def main() -> None:
+    """
+    :return: None
+    """
+    args = parse_args()
+    file_format_name = args.file_type
 
-output_highlights_found()
-output_error_labels_defined()
+    # Basic directory tree
+    # $CWD are not to be changed and expected to be in 'one-syntax' subdirectroy by default, otherwise use '-b' option
+    base_dirpath = Path.cwd()
+    template_dirpath_relative = Path('templates')  # option '-t'
+    corpus_dirpath_relative = Path('corpus')    # option '-c'
+    output_dirpath_relative = Path('output')    # option '-o'
+
+    # Obtain user-supplied basepath (either in relative/absolute path)
+    if args.base_path:
+        base_dirpath = args.base_path
+
+    # Now, merge the base_dirpath (or its other arguments) with the tree
+    # Update any syntax corpus dirpath
+    if args.corpus:
+        # Replace canned syntax tree with user-defined ones
+        corpus_dirpath = args.corpus
+    else:
+        corpus_dirpath = corpus_dirpath_relative
+    if not corpus_dirpath.is_dir():
+        raise ArgumentTypeError('Corpus \'' + str(corpus_dirpath) + '\' is not a subdirectory')
+
+    if args.template:
+        template_dirpath = args.template
+    else:
+        template_dirpath = template_dirpath_relative
+    if not template_dirpath.is_dir():
+        raise ArgumentTypeError('Template \'' + str(corpus_dirpath) + '\' is not a subdirectory')
+
+    if args.output:
+        output_dirpath = args.output
+    else:
+        output_dirpath = output_dirpath_relative
+    if not output_dirpath.is_dir():
+        raise ArgumentTypeError('Output \'' + str(corpus_dirpath) + '\' is not a subdirectory')
+
+    # Map out remaining tree pathways (noticed no '_relative' nor absolute notation)
+    corpus_fileformat_dirpath = corpus_dirpath / Path(file_format_name)
+    corpus_fileformat_tree_dirpath = corpus_fileformat_dirpath / 'syntax-tree'
+    corpus_fileformat_platform_dirpath = corpus_fileformat_dirpath / editor_platform_target
+
+    template_platform_dirpath = template_dirpath / editor_platform_target
+
+    output_fileformat_dirpath = output_dirpath / Path(file_format_name)
+    output_fileformat_platform_dirpath = output_fileformat_dirpath / Path(editor_platform_target)
+    output_vim_syntax_dirpath = output_fileformat_platform_dirpath / 'syntax'
+    vim_syntax_subdir = output_vim_syntax_dirpath
+
+    # set our first global options
+    options = parse_simple_ini.get_main_options(corpus_fileformat_tree_dirpath)
+    symbol_prefix = options.get('symbol_name_prefix')
+    file_format_name = symbol_prefix.rstrip('_')
+
+    # Your code here
+    print(f"File-format: {file_format_name}")
+    print(f"Base: {base_dirpath}")
+    print(f"Corpus syntax tree: {corpus_fileformat_tree_dirpath}")
+    print(f"Build area: {vim_syntax_subdir}")
+    print(f"  derived from: {template_platform_dirpath}")
+    print(f"  derived from: {corpus_fileformat_platform_dirpath}")
+    # Retrieve options from root 'syntax-tree/.config.main.ini
+
+    output_vimscript_comment('AUTO-GENERATED BY YOURS TRULY!')
+    # Do top-level differently than rest of tree-traversing
+    start_directory_traverse(corpus_fileformat_tree_dirpath, symbol_prefix)
+
+    output_highlights_found()
+    output_error_labels_defined()
+
+if __name__ == '__main__':
+    main()
+
+
