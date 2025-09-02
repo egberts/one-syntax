@@ -2,15 +2,15 @@
 Configuration file and its settings
 """
 import pathlib
+from typing import Dict
 
-
-def read(file_path: pathlib):
+def read(file_path: pathlib.Path) -> Dict[str, str]:
     """
 
     :param file_path:
     :return:
     """
-    config = {}
+    config: Dict[str, str] = {}
     try:
         with open(file_path, 'r') as f:
             for line in f:
@@ -59,7 +59,7 @@ valid_node_follow_on_options = {
 }
 
 
-def get_main_options(path: pathlib):
+def get_main_options(path: pathlib.Path) -> Dict[str, str]:
     """
 
     :param path:
@@ -75,10 +75,15 @@ def get_main_options(path: pathlib):
     return retrieved_main_options
 
 
-def get_node_options(path: pathlib):
+def get_node_options(path: pathlib.Path) -> Dict[str, str]:
     """
+    Retrieves and validates node options from a configuration file.
 
-    :param path:
+    Reads node options from a configuration file and validates them.
+
+    :param path: Path to the directory containing the configuration file.
+    :return: Dictionary of node options.
+    :raises ValueError: If an invalid option or follow-on token is found.
     """
     node_config_filespec = path / '.config.ini'
     if not node_config_filespec.exists():
@@ -92,7 +97,8 @@ def get_node_options(path: pathlib):
     if 'follow_on_to_only' in retrieved_node_config_options:
         if retrieved_node_config_options['follow_on_to_only']:
             # Validate further
-            for this_follow_on in retrieved_node_config_options['follow_on_to_only'].split(","):
-                if this_follow_on not in valid_node_follow_on_options:
-                    raise ValueError("Invalid follow-on token " + this_follow_on + " in config " + str(node_config_filespec) +" file.")
+            for follow_on_token in retrieved_node_config_options['follow_on_to_only'].split(","):
+                if follow_on_token not in valid_node_follow_on_options:
+                    raise ValueError(f"Invalid follow-on token '{follow_on_token}' in config {node_config_filespec} file.")
+                    raise ValueError(f"Invalid follow-on token '{token}' in config {node_config_filespec} file.")
     return retrieved_node_config_options

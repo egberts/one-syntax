@@ -3,27 +3,26 @@ The Right Stuff
 """
 from argparse import ArgumentTypeError
 from collections import deque
+from collections.abc import Sized
 from pathlib import Path
+from typing import Set, Dict, Optional, Any, Deque, List, Tuple
 
 import construct_symbol_name
 import parse_simple_ini
 
-symbol_prefix = ''
-file_format_name = ''
-editor_platform_target = 'vim'
+
+target_symbol_prefix:str  = ''
+target_file_format:str  = ''
+TARGET_EDITOR_PLATFORM:str = 'vim'
+target_error_defined: List[Tuple[str, str, str]] = []
+target_highlights_found: Set[Optional[str]] = set()
+target_highlights_printed = []
+target_corpus_fileformat_tree_dirpath:Path = ''
 
 # Define pathspec for directory traversal
 CORPUS_SYNTAX_TREE_DIRPATH = '/home/wolfe/work/github/one-syntax/'
 
-
-# Need to place highlight labels firstly
-# Need to place error handling labels firstly
-errors_defined = []
-highlights_found = []
-highlights_printed = []
-
-
-def is_root_node(stack: dict) -> bool:
+def is_root_node(stack: Sized) -> bool:
     """
     Check if a node is the root of the syntax tree
     :param stack:
@@ -53,13 +52,56 @@ def output_highlights_found() -> None:
     :rtype: None
     """
     output_vimscript_comment('Highlights found:')
-    for this_highlight in highlights_found:
+    for this_highlight in target_highlights_found:
         group_name = this_highlight[0]
         label_name = this_highlight[1]
         referenced_by = this_highlight[2]
         output_vimscript_comment('  Highlight \'' + group_name +  '\' referenced by ' + referenced_by)
-        if any(group_name not in item[0] for item in highlights_found):
+        if any(group_name not in item[0] for item in target_highlights_found):
             print('highlight link ' + group_name + ' ' + label_name)
+
+def output_vimscript_highlight_defaults(syntax_tree_path: Path) -> None:
+
+    def collect_all_highlights(syntax_tree: Path) -> Set[str]:
+        """
+        Read a specific key from all '.config.ini' files in subdirectories.
+        Handles non-standard INI files without sections.
+        Returns a dictionary mapping file paths to the key's value (or None if not found).
+        :return:
+        """
+        key_name:str = "highlight_color_name"
+        set_of_default_highlights: Set[Optional[str]] = set()
+
+        # Find all .config.ini files in subdirectories
+        for config_file in syntax_tree.rglob(".config.ini"):
+            try:
+                with open(config_file, 'r') as f:
+                    for line in f:
+                        # Skip comments and empty lines
+                        line = line.strip()
+                        if not line or line.startswith('#'):
+                            continue
+                        # Split on first '=' to handle values containing '='
+                        if '=' in line:
+                            k, v = map(str.strip, line.split('=', 1))
+                            if k == key_name:
+                                # Store non-duplicative encounters
+                                set_of_default_highlights.add(v)
+                                break
+            except (IOError, UnicodeDecodeError):
+                pass
+        return set_of_default_highlights
+
+    def output_highlight_default_links_found(default_highlights: List, prefix: str) -> None:
+        for this_hi in default_highlights:
+            system_highlight = this_hi
+            highlight_prefix = prefix.rstrip('_') + 'HL_'
+            target_specific_highlight = highlight_prefix + this_hi
+            print(f"highlight default link {target_specific_highlight} {system_highlight}")
+
+    list_of_default_highlights = collect_all_highlights(syntax_tree_path)
+    output_highlight_default_links_found(list_of_default_highlights, target_symbol_prefix)
+    return
 
 
 def output_error_labels_defined() -> None:
@@ -68,9 +110,9 @@ def output_error_labels_defined() -> None:
     :rtype: None
     """
     output_vimscript_comment(' Error Handlers encountered')
-    for this_error_handler in errors_defined:
+    for this_error_handler in target_error_defined:
         group_name = this_error_handler[0]
-        symbol = this_error_handler[1]
+        # symbol = this_error_handler[1]
         pattern = this_error_handler[2]
         print('syntax match ' + group_name + ' \'' + pattern + '\' contained')
 
@@ -130,15 +172,17 @@ def output_vimscript_highlight(symbol_name: str, highlight_link_label: str) -> N
     :param highlight_link_label:
     :rtype: None
     """
-    group_name = file_format_name.rstrip('_') + 'HL_' + highlight_link_label
+    global target_file_format
+
+    group_name = target_file_format.rstrip('_') + 'HL_' + highlight_link_label
     # iterate and collect name of next keywords
     print("highlight link %s %s" % (symbol_name, group_name))
     # print("highlight link %s %s" % (group_name, highlight_link_label))
     # track all highlight group names for later output
-    highlights_found.append([ group_name, highlight_link_label, symbol_name])
+    target_highlights_found.add((group_name, highlight_link_label, symbol_name))
 
 
-def output_vimscript_syn_match(stack, path: Path, group_name: str, node_options, non_terminal: bool) -> None:
+def output_vimscript_syn_match(stack: Deque[Path], path: Path, group_name: str, node_options: Dict[str, Any], non_terminal: bool) -> None:
     """
 
     :param path:
@@ -156,8 +200,9 @@ def output_vimscript_syn_match(stack, path: Path, group_name: str, node_options,
 
 
         if 'pattern' in node_options:
-            option_pattern = node_options['pattern']
-            regex_pattern = option_pattern.rstrip('\'').lstrip('\'')
+            option_pattern: str = node_options['pattern']
+            regex_pattern = option_pattern
+            regex_pattern = regex_pattern.rstrip('\'').lstrip('\'')
             if non_terminal:
                 pattern = '\\v' + regex_pattern
             elif not non_terminal:
@@ -202,12 +247,16 @@ def output_vimscript_nextgroup(path: Path, group_name: str) -> None:
         # output the length-lexical sort order of group names
 
 
-def output_vimscript_nextgroup_error_handlers(error_options: list) -> None:
+from typing import Dict, Any
+
+def output_vimscript_nextgroup_error_handlers(error_options: Dict[str, Any]) -> None:
     """
 
     :param error_options:
     :rtype: None
     """
+    global target_symbol_prefix
+    
     if not error_options:
         print('\\    nft_Error')
         return
@@ -225,10 +274,10 @@ def output_vimscript_nextgroup_error_handlers(error_options: list) -> None:
     if 'equal' in list_of_foto:
         list_of_foto.remove('equal')
         add_on_pattern = '='
-        new_error_group_name = symbol_prefix + 'Error_equal_not_found'
+        new_error_group_name = target_symbol_prefix + 'Error_equal_not_found'
         print('\\    %s' % new_error_group_name)
         final_antipattern = r'\v[^' + add_on_pattern + ']'
-        errors_defined.append([ new_error_group_name, add_on_pattern, final_antipattern])
+        target_error_defined.append((new_error_group_name, add_on_pattern, final_antipattern))
         #print('error_defined (running): ', errors_defined)
     # TODO: construct unique error handler
     if not not list_of_foto:
@@ -372,14 +421,23 @@ def parse_args():
     parser.add_argument('-c', '--corpus', type=Path, required=False, help='Directory to corpus of syntax tree')
     parser.add_argument('-t', '--template', type=Path, required=False, help='Template file path')
     parser.add_argument('-o', '--output', type=Path, required=False, help='Output file path')
+    parser.add_argument('-v', '--verbose', type=int, required=False, help='Verbosity level')
+    parser.add_argument('-V', '--version', required=False, help='Version')
     return parser.parse_args()
 
 def main() -> None:
     """
     :return: None
     """
+    global target_symbol_prefix
+    global target_file_format
+
+    target_symbol_prefix = ''
     args = parse_args()
-    file_format_name = args.file_type
+    if args.file_type is None:
+        raise ArgumentTypeError("--file-type argument must be defined")
+    else:
+        target_file_format = args.file_type
 
     # Basic directory tree
     # $CWD are not to be changed and expected to be in 'one-syntax' subdirectroy by default, otherwise use '-b' option
@@ -417,24 +475,29 @@ def main() -> None:
         raise ArgumentTypeError('Output \'' + str(output_dirpath) + '\' is not a subdirectory')
 
     # Map out remaining tree pathways (noticed no '_relative' nor absolute notation)
-    corpus_fileformat_dirpath = corpus_dirpath / Path(file_format_name)
+    corpus_fileformat_dirpath = corpus_dirpath / Path(target_file_format)
     corpus_fileformat_tree_dirpath = corpus_fileformat_dirpath / 'syntax-tree'
-    corpus_fileformat_platform_dirpath = corpus_fileformat_dirpath / editor_platform_target
+    corpus_fileformat_platform_dirpath = corpus_fileformat_dirpath / TARGET_EDITOR_PLATFORM
+    target_corpus_fileformat_platform_dirpath = corpus_fileformat_tree_dirpath.absolute()
 
-    template_platform_dirpath = template_dirpath / editor_platform_target
+    template_platform_dirpath = template_dirpath / TARGET_EDITOR_PLATFORM
 
-    output_fileformat_dirpath = output_dirpath / Path(file_format_name)
-    output_fileformat_platform_dirpath = output_fileformat_dirpath / Path(editor_platform_target)
+    output_fileformat_dirpath = output_dirpath / Path(target_file_format)
+    output_fileformat_platform_dirpath = output_fileformat_dirpath / Path(TARGET_EDITOR_PLATFORM)
     output_vim_syntax_dirpath = output_fileformat_platform_dirpath / 'syntax'
     vim_syntax_subdir = output_vim_syntax_dirpath
 
     # set our first global options
     options = parse_simple_ini.get_main_options(corpus_fileformat_tree_dirpath)
-    symbol_prefix = options.get('symbol_name_prefix')
-    file_format_name = symbol_prefix.rstrip('_')
+    opt_prefix: (str|None) = options.get('symbol_name_prefix')
+    if opt_prefix is None:
+        raise ValueError(f"Missing required main option 'symbol_name_prefix' in {corpus_fileformat_tree_dirpath}/.config.main.ini config file.")
+    else:
+        target_symbol_prefix = opt_prefix
+    target_file_format = target_symbol_prefix.rstrip('_')
 
     # Your code here
-    print(f"File-format: {file_format_name}")
+    print(f"File-format: {target_file_format}")
     print(f"Base: {base_dirpath}")
     print(f"Corpus syntax tree: {corpus_fileformat_tree_dirpath}")
     print(f"Build area: {vim_syntax_subdir}")
@@ -443,10 +506,12 @@ def main() -> None:
     # Retrieve options from root 'syntax-tree/.config.main.ini
 
     output_vimscript_comment('AUTO-GENERATED BY YOURS TRULY!')
-    # Do top-level differently than rest of tree-traversing
-    start_directory_traverse(corpus_fileformat_tree_dirpath, symbol_prefix)
+    # Need to declare highlight firstly before anything
+    output_vimscript_highlight_defaults(corpus_fileformat_tree_dirpath)
 
-    output_highlights_found()
+    # Do top-level differently than rest of tree-traversing
+    start_directory_traverse(corpus_fileformat_tree_dirpath, target_symbol_prefix)
+
     output_error_labels_defined()
 
 if __name__ == '__main__':
