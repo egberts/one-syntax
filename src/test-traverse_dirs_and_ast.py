@@ -5,7 +5,7 @@ from argparse import ArgumentTypeError
 from collections import deque
 from collections.abc import Sized
 from pathlib import Path
-from typing import Set, Dict, Optional, Any, Deque, List, Tuple
+from typing import cast, Set, Dict, Optional, Any, Deque, List, Tuple
 
 import construct_symbol_name
 import parse_simple_ini
@@ -17,7 +17,7 @@ TARGET_EDITOR_PLATFORM:str = 'vim'
 target_error_defined: List[Tuple[str, str, str]] = []
 target_highlights_found: Set[Optional[str]] = set()
 target_highlights_printed = []
-target_corpus_fileformat_tree_dirpath:Path = ''
+target_corpus_fileformat_tree_dirpath:Path = Path('.')
 
 # Define pathspec for directory traversal
 CORPUS_SYNTAX_TREE_DIRPATH = '/home/wolfe/work/github/one-syntax/'
@@ -52,17 +52,19 @@ def output_highlights_found() -> None:
     :rtype: None
     """
     output_vimscript_comment('Highlights found:')
-    for this_highlight in target_highlights_found:
-        group_name = this_highlight[0]
-        label_name = this_highlight[1]
-        referenced_by = this_highlight[2]
-        output_vimscript_comment('  Highlight \'' + group_name +  '\' referenced by ' + referenced_by)
-        if any(group_name not in item[0] for item in target_highlights_found):
-            print('highlight link ' + group_name + ' ' + label_name)
+    if target_highlights_found:
+        have_target_highlights = cast(Set[str], target_highlights_found)
+        for this_highlight in have_target_highlights:
+            group_name = this_highlight[0]
+            label_name = this_highlight[1]
+            referenced_by = this_highlight[2]
+            output_vimscript_comment('  Highlight \'' + group_name +  '\' referenced by ' + referenced_by)
+            if any(group_name not in item[0] for item in have_target_highlights):
+                print('highlight link ' + group_name + ' ' + label_name)
 
 def output_vimscript_highlight_defaults(syntax_tree_path: Path) -> None:
 
-    def collect_all_highlights(syntax_tree: Path) -> Set[str]:
+    def collect_all_highlights(syntax_tree: Path) -> Set[Optional[str]]:
         """
         Read a specific key from all '.config.ini' files in subdirectories.
         Handles non-standard INI files without sections.
@@ -92,15 +94,17 @@ def output_vimscript_highlight_defaults(syntax_tree_path: Path) -> None:
                 pass
         return set_of_default_highlights
 
-    def output_highlight_default_links_found(default_highlights: List, prefix: str) -> None:
+    def output_highlight_default_links_found(default_highlights: Set[str], prefix: str) -> None:
         for this_hi in default_highlights:
             system_highlight = this_hi
             highlight_prefix = prefix.rstrip('_') + 'HL_'
-            target_specific_highlight = highlight_prefix + this_hi
-            print(f"highlight default link {target_specific_highlight} {system_highlight}")
+            platform_specific_highlight = highlight_prefix + this_hi
+            print(f"highlight default link {platform_specific_highlight} {system_highlight}")
 
     list_of_default_highlights = collect_all_highlights(syntax_tree_path)
-    output_highlight_default_links_found(list_of_default_highlights, target_symbol_prefix)
+    # Filter out None values to ensure type is Set[str]
+    filtered_highlights: Set[str] = {x for x in list_of_default_highlights if x is not None}
+    output_highlight_default_links_found(filtered_highlights, target_symbol_prefix)
     return
 
 
@@ -268,8 +272,6 @@ def output_vimscript_nextgroup_error_handlers(error_options: Dict[str, Any]) -> 
 
     list_of_foto = follow_on_to_only.split(',')
     # concatenate a list of anti-pattern firstly
-    anti_pattern = ''
-    #for this_token in list_of_foto:
 
     if 'equal' in list_of_foto:
         list_of_foto.remove('equal')
@@ -328,9 +330,6 @@ def process_end_node_terminal(parent_path: Path, path: Path, parent_symbol_name:
     :param stack:
     :rtype: None
     """
-    #    print("  File: %s" % entry)
-    #    print("  Stack: %s" % [p.name for p in stack])  # Debug: show full stack
-    pattern = '\\v' + symbol_name  # default pattern
     node_options = parse_simple_ini.get_node_options(path)
     if node_options:
         output_vimscript_comment("Terminal symbol (dir): ' + symbol_name + ' (has .config.ini)")
@@ -342,18 +341,18 @@ def process_end_node_terminal(parent_path: Path, path: Path, parent_symbol_name:
         output_vimscript_comment("Terminal symbol (dir): " + symbol_name)
         
     # There is a loop here for multiple patterns using exact same group name
-    output_vimscript_comment(path)
+    output_vimscript_comment(str(path))
     if 'highlight_color_name' in node_options:
         output_vimscript_highlight(symbol_name, node_options['highlight_color_name'])
     output_vimscript_syn_match(stack, path, symbol_name, node_options, non_terminal=False)
     output_vimscript_comment('')
 
 
-def start_directory_traverse(start_dir: object, hidden_prefix: Path = Path("."), prefix: str = 'nft_') -> None:
+def start_directory_traverse(start_dirpath: Path, hidden_prefix: str, prefix: str = 'nft_') -> None:
     """
 
     :return: None
-    :param start_dir:
+    :param start_dirpath:
     :param hidden_prefix:
     :param prefix:
     :rtype: None
@@ -372,7 +371,7 @@ def start_directory_traverse(start_dir: object, hidden_prefix: Path = Path("."),
                 # Skip hidden files, nft_* files, and config files
                 if entry.name.startswith('.'):
                     continue
-                if entry.name.startswith(str(hidden_prefix)):
+                if entry.name.startswith(hidden_prefix):
                     continue
                 if entry.name.startswith('.config'):
                     continue
@@ -400,7 +399,7 @@ def start_directory_traverse(start_dir: object, hidden_prefix: Path = Path("."),
         stack.pop()
 
     # Run start_directory_traverse() with pathspec to its top-level directory
-    start_path = Path(start_dir).resolve()  # Convert to Path and resolve
+    start_path = start_dirpath.resolve()  # Convert to Path and resolve
     if start_path.is_file():
         print("Path %s is a file, not a directory; aborted." % start_path.name)
         return
@@ -416,13 +415,18 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Process input and output files.')
-    parser.add_argument('-f', '--file-type', type=str, required=True, help='Type of file format')
-    parser.add_argument('-b', '--base-path', type=Path, required=False, default=CORPUS_SYNTAX_TREE_DIRPATH, help='Base directory path (default is $CWD)')
-    parser.add_argument('-c', '--corpus', type=Path, required=False, help='Directory to corpus of syntax tree')
-    parser.add_argument('-t', '--template', type=Path, required=False, help='Template file path')
-    parser.add_argument('-o', '--output', type=Path, required=False, help='Output file path')
-    parser.add_argument('-v', '--verbose', type=int, required=False, help='Verbosity level')
-    parser.add_argument('-V', '--version', required=False, help='Version')
+    parser.add_argument('-f', '--file-type', metavar='filetype', type=str, required=True, help='Type of file format')
+    parser.add_argument('-b', '--base-path', metavar='one-syntax_dir_spec', type=Path, required=False, default=CORPUS_SYNTAX_TREE_DIRPATH, help='Base directory path (default is $CWD)')
+    parser.add_argument('-c', '--corpus', metavar='corpus_dir_spec', type=Path, required=False, help='Directory to corpus of syntax tree')
+    parser.add_argument('-t', '--template', metavar='template_dir_spec', type=Path, required=False, help='Template file path')
+    parser.add_argument('-o', '--output', metavar='output_dir_spec', type=Path, required=False, help='Output file path')
+    parser.add_argument('-v', '--verbose', action='store_true', required=False, help='Verbosity level')
+    parser.add_argument(
+        '-V', '--version',
+        action='version',
+        version='%(prog)s 1.0.0',
+        help="Show program's version number and exit."
+    )
     return parser.parse_args()
 
 def main() -> None:
@@ -478,7 +482,6 @@ def main() -> None:
     corpus_fileformat_dirpath = corpus_dirpath / Path(target_file_format)
     corpus_fileformat_tree_dirpath = corpus_fileformat_dirpath / 'syntax-tree'
     corpus_fileformat_platform_dirpath = corpus_fileformat_dirpath / TARGET_EDITOR_PLATFORM
-    target_corpus_fileformat_platform_dirpath = corpus_fileformat_tree_dirpath.absolute()
 
     template_platform_dirpath = template_dirpath / TARGET_EDITOR_PLATFORM
 

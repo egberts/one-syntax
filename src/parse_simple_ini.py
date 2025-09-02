@@ -4,6 +4,7 @@ Configuration file and its settings
 import pathlib
 from typing import Dict
 
+
 def read(file_path: pathlib.Path) -> Dict[str, str]:
     """
 
@@ -40,22 +41,22 @@ valid_node_options = {
 }
 
 valid_node_follow_on_options = {
-    'new_line',          # \n
+    'new_line',  # \n
     'end_of_statement',  # ;
     'start_block_delimiter',  # {
-    'end_block_delimiter',    # }
-    'equal',    # =
-    'start_parenthesis',    # (
-    'end_parenthesis',      # )
-    'slash',    # /
-    'at_symbol',    # @
-    'dot',    # .
-    'colon',    # :
-    'comma',    # 
-    'plus',     # +
-    'dash',     # -
-    'asterisk',    # *
-    'hashmark',    # #
+    'end_block_delimiter',  # }
+    'equal',  # =
+    'start_parenthesis',  # (
+    'end_parenthesis',  # )
+    'slash',  # /
+    'at_symbol',  # @
+    'dot',  # .
+    'colon',  # :
+    'comma',  #
+    'plus',  # +
+    'dash',  # -
+    'asterisk',  # *
+    'hashmark',  # #
 }
 
 
@@ -77,28 +78,35 @@ def get_main_options(path: pathlib.Path) -> Dict[str, str]:
 
 def get_node_options(path: pathlib.Path) -> Dict[str, str]:
     """
-    Retrieves and validates node options from a configuration file.
-
-    Reads node options from a configuration file and validates them.
+    Reads node options from a configuration file, validates them, and returns a dictionary of options.
 
     :param path: Path to the directory containing the configuration file.
     :return: Dictionary of node options.
     :raises ValueError: If an invalid option or follow-on token is found.
     """
-    node_config_filespec = path / '.config.ini'
-    if not node_config_filespec.exists():
+    if not path.exists():
+        raise FileNotFoundError(f"Path '{path}' does not exist.")
+    if not path.is_dir():
+        raise NotADirectoryError(f"Path '{path}' is not a directory.")
+    node_config_path = path / '.config.ini'
+    if not node_config_path.exists():
+        # No config file, return empty dictionary
         return {}
-    retrieved_node_config_options = read(node_config_filespec)
-    # validate options
+    # Read config file
+    retrieved_node_config_options = read(node_config_path)
+    # enforce valid options in syntax tree's config.ini file.
     for this_node_option in retrieved_node_config_options:
+        # Validate option name
         if this_node_option not in valid_node_options:
-            raise ValueError(f"Invalid option '{this_node_option}' in config {node_config_filespec} file.")
-
-    if 'follow_on_to_only' in retrieved_node_config_options:
-        if retrieved_node_config_options['follow_on_to_only']:
+            raise ValueError(f"Invalid option '{this_node_option}' in config {node_config_path} file.")
+        # Validate follow-on tokens if present
+        if this_node_option == 'follow_on_to_only' and retrieved_node_config_options['follow_on_to_only']:
+            tokens = retrieved_node_config_options['follow_on_to_only'].split(',')
             # Validate further
-            for follow_on_token in retrieved_node_config_options['follow_on_to_only'].split(","):
-                if follow_on_token not in valid_node_follow_on_options:
-                    raise ValueError(f"Invalid follow-on token '{follow_on_token}' in config {node_config_filespec} file.")
-                    raise ValueError(f"Invalid follow-on token '{token}' in config {node_config_filespec} file.")
+            for token in tokens:
+                if token not in valid_node_follow_on_options:
+                    raise ValueError(
+                        f"Invalid follow-on token '{token}' in config {node_config_path} file. "
+                        f"Valid tokens are: {valid_node_follow_on_options}"
+                    )
     return retrieved_node_config_options
