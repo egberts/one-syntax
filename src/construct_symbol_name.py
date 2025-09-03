@@ -10,17 +10,19 @@ Purpose: Construct consistent symbol/group names from a parsing stack.
 import re
 import logging
 import pathlib
-from collections.abc import Sequence
-from typing import Any, List, Deque
+from typing import List, Deque
 
 logging.basicConfig(level=logging.ERROR)
 
 def convert(previous_name: str, name: str) -> str:
     """
 
-    :param previous_name:
-    :param name:
-    :return:
+    :param previous_name: The previous file name to use for context
+    :type previous_name: `str`
+    :param name:  The file name to convert before passing off as a symbol name
+    :type name: `str`
+    :return: The converted name
+    :rtype: `str`
     """
     if len(name) == 1:
         if name == '{':
@@ -30,22 +32,26 @@ def convert(previous_name: str, name: str) -> str:
         if name == '#':
             return 'hash'
         if name == '[':
+            # noinspection SpellCheckingInspection
             return 'lbracket'
         if name == ']':
+            # noinspection SpellCheckingInspection
             return 'rbracket'
     return name
 
 
-def get_dir_stackless(syntax_root_path: pathlib.Path, file_path: pathlib.Path, prefix: str) -> str:
+# noinspection PyUnresolvedReferences
+def get_dir_stackless(syntax_root_path: pathlib.Path, file_path: pathlib.Path) -> str:
     """
     Convert a file path to a valid Python snake_case variable name.
     Iterates through each path component, applying special conversions if provided.
 
-    :param syntax_root_path:
+    :param syntax_root_path: The root path to remove from the start (e.g., '/path/to').
+    :type syntax_root_path: `Path`
     :param file_path: The file path to convert (e.g., '/path/to/sub_dir/config.ini').
-    :param special_conversions: Optional dictionary mapping path parts to custom names.
-    :param prefix: A string prefix (e.g., 'nft_' for Vimscript group names).
+    :type file_path: `Path`
     :return: A constructed symbol name string.
+    :rtype: `str`
     :raises ValueError: If the stack is invalid (e.g., starts with '{').
 
     Returns:
@@ -107,16 +113,16 @@ def get_dir(stack: Deque[pathlib.Path], prefix: str) -> str:
     Construct a snake_case symbol/group name string from a parsing stack.
 
     :param stack: A sequence of parsed tokens/nodes (each must have a `.name` attribute).
+    :type stack: `Deque[pathlib.Path]`
     :param prefix: A string prefix (e.g., 'nft_' for Vimscript group names).
+    :type stack: `str`
     :return: A constructed symbol name string.
+    :rtype: `str`
     :raises ValueError: If the stack is invalid (e.g., starts with '{').
     """
     # If too short, a simple quit with an empty string shall suffice
     #if len(stack) <= 1:  # i think this is no longer needed now that root node has its own traversal function
     #    return ''
-
-    from typing import List
-    from typing import List
     names: List[str] = []
     parent_name = ''
 
@@ -148,30 +154,38 @@ def get_dir(stack: Deque[pathlib.Path], prefix: str) -> str:
     return prefix.rstrip('_') + list_of_syms
 
 
-def get_file(stack: Sequence[Any], filename2: str, prefix: str) -> str:
+def get_file(stack: Deque[pathlib.Path], filename2: str, prefix: str) -> str:
     """
     Construct a snake_case symbol/group name string from a parsing stack.
 
-    :param filename2:
     :param stack: A sequence of parsed tokens/nodes (each must have a `.name` attribute).
+    :type stack: `Deque[pathlib.Path]`
+    :param filename2: A string suffix (e.g., 'config' for Vimscript variable names).
+    :type filename2: `str`
     :param prefix: A string prefix (e.g., 'nft_' for Vimscript group names).
+    :type prefix: `str`
     :return: A constructed symbol name string.
+    :rtype: `str`
     :raises ValueError: If the stack is invalid (e.g., starts with '{').
     """
     # If too short, a simple quit with an empty string shall suffice
     #if len(stack) <= 1:  # i think this is no longer needed now that root node has its own traversal function
     #    return ''
 
-    names: List[str] = []
     parent_name = ''
+    names: List[str] = []
 
+    # Process each part
     for item in list(stack)[1:]:
+        # Extract name attribute
         name = getattr(item, "name", None)
+        # Validate name
         if not name:
             raise ValueError("Stack item missing 'name' attribute")
         if len(name) == 0:
             raise ValueError("Empty name!")
 
+        # Apply special conversion if exists
         converted_name = convert(parent_name, name)
         if name.isupper():
             # Preserve all-uppercase names (TABLE, CHAIN, etc.)
@@ -180,9 +194,13 @@ def get_file(stack: Sequence[Any], filename2: str, prefix: str) -> str:
             # Normalize to snake_case: lowercased, non-alphanumerics → underscores
             snake_case_name = re.sub(r'[^a-zA-Z0-9]+', '_', converted_name.lower()).strip('_')
 
+        # Append to names list
         names.append(snake_case_name)
+
+        # Update parent_name for next iteration
         parent_name = snake_case_name
 
+    # Safely join prefix and names (avoid duplicate underscores)
     if len(names) == 0:
         list_of_syms = ''
     else:

@@ -4,7 +4,6 @@ The Right Stuff
 import argparse
 from argparse import Namespace
 from collections import deque
-from collections.abc import Sized
 from pathlib import Path
 from typing import cast, Set, Dict, Optional, Any, Deque, List, Tuple
 
@@ -16,20 +15,19 @@ target_file_format: str = ''
 TARGET_EDITOR_PLATFORM: str = 'vim'
 target_error_defined: List[Tuple[str, str, str]] = []
 target_highlights_found: Set[Tuple[str, str, str]] = set()
-target_highlights_printed = []
+target_highlights_printed: List[str] = []
 target_corpus_fileformat_tree_dirpath: Path = Path('.')
 
-# Define pathspec for directory traversal
-CORPUS_SYNTAX_TREE_DIRPATH = '/home/wolfe/work/github/one-syntax/'
 
-
-def is_root_node(stack: Sized) -> bool:
+def is_root_node(stack: Deque[Path]) -> bool:
     """
-    Check if a node is the root of the syntax tree
-    :param stack:
-    :rtype: bool
+    Check if a node is the root of the syntax tree.
+    :param stack: a stack of Path objects representing the current traversal path
+    :type stack: `Deque[Path]`
     :return: Returns True if a given node is the tree root
+    :rtype: `bool`
     """
+    # root node has only one item in the stack
     if len(stack) == 1:
         return True
     return False
@@ -38,29 +36,41 @@ def is_root_node(stack: Sized) -> bool:
 def output_vimscript_comment(comment_line: str) -> None:
     """
     Generate a Vimscript comment line
-    :param comment_line:
-    :ptype comment_line: str
-    :rtype: None
+    :param comment_line: a comment line
+    :type comment_line: `str`
+    :return: None
+    :rtype: `None`
     """
-    # iterate and collect name of next keywords
+    # print a Vimscript comment line
     print("\" %s" % comment_line)
 
 
 def output_highlights_found() -> None:
     """
     Output a list of highlight group name found in all the
-    .config.ini files of a syntax tree.
-    Output each line as a definition statement in Vimscript
-    :rtype: None
+    `.config.ini` files of a syntax tree.
+    :return: None
+    :rtype: `None`
     """
+    # Output a list of highlight group names found
     output_vimscript_comment('Highlights found:')
+    # de-duplicate the set of highlights found
     if target_highlights_found:
+        # cast to a Set[str] for mypy
         have_target_highlights = cast(Set[str], target_highlights_found)
         for this_highlight in have_target_highlights:
+            # unpack the tuple
             group_name = this_highlight[0]
             label_name = this_highlight[1]
             referenced_by = this_highlight[2]
+            # avoid re-printing the same highlight group name
+            if group_name in target_highlights_printed:
+                continue
+            # track what we have printed
+            target_highlights_printed.append(group_name)
+            # print a comment line for reference
             output_vimscript_comment('  Highlight \'' + group_name + '\' referenced by ' + referenced_by)
+            # print the actual Vimscript highlight link command
             if any(group_name not in item[0] for item in have_target_highlights):
                 print('highlight link ' + group_name + ' ' + label_name)
 
@@ -68,9 +78,10 @@ def output_highlights_found() -> None:
 def output_vimscript_highlight_defaults(syntax_tree_path: Path) -> None:
     """
 
-    :param syntax_tree_path:
-    :ptype syntax_tree_path: Path
-    :rtype: None
+    :param syntax_tree_path: Path to the root of syntax tree
+    :type syntax_tree_path: `Path`
+    :return: None
+    :rtype: `None`
     """
 
     def collect_all_highlights(syntax_tree: Path) -> Set[Optional[str]]:
@@ -79,9 +90,9 @@ def output_vimscript_highlight_defaults(syntax_tree_path: Path) -> None:
         Handles non-standard INI files without sections.
         Returns a dictionary mapping file paths to the key's value (or None if not found).
         :param syntax_tree: Path to the root of syntax tree
-        :ptype syntax_tree: Path
+        :type syntax_tree: `Path`
         :return:   A set of generic highlight labels
-        :rtype: Set[Optional[str]]
+        :rtype: `Set[Optional[str]]`
         """
         key_name: str = "highlight_color_name"
         set_of_default_highlights: Set[Optional[str]] = set()
@@ -89,6 +100,7 @@ def output_vimscript_highlight_defaults(syntax_tree_path: Path) -> None:
         # Find all .config.ini files in subdirectories
         for config_file in syntax_tree.rglob(".config.ini"):
             try:
+                # Read the file line by line
                 with open(config_file, 'r') as f:
                     for line in f:
                         # Skip comments and empty lines
@@ -109,16 +121,26 @@ def output_vimscript_highlight_defaults(syntax_tree_path: Path) -> None:
     def output_highlight_default_links_found(default_highlights: Set[str], prefix: str) -> None:
         """
         Output the default highlight links used in this syntax tree.
-        :param default_highlights: a set of highlight labels
-        :ptype default_highlights: Set[str]
-        :param prefix: the symbol name prefix
-        :ptype prefix: str
-        :rtype: None
+        :param default_highlights: Set of generic highlight labels
+        :type default_highlights: `Set[str]`
+        :param prefix: a prefix for the highlight group names
+        :type prefix: `str`
+        :return: None
+        :rtype: `None`
         """
+        # Output a list of highlight group names found in .config.ini files
+        output_vimscript_comment('Default highlights found:')
         for this_hi in default_highlights:
+            # print a comment line for reference
             system_highlight = this_hi
+            # print the actual Vimscript highlight link command
             highlight_prefix = prefix.rstrip('_') + 'HL_'
+            # avoid re-printing the same highlight group name
             platform_specific_highlight = highlight_prefix + this_hi
+            # track what we have printed
+            if platform_specific_highlight in target_highlights_printed:
+                continue
+            target_highlights_printed.append(platform_specific_highlight)
             print(f"highlight default link {platform_specific_highlight} {system_highlight}")
 
     list_of_default_highlights = collect_all_highlights(syntax_tree_path)
@@ -131,7 +153,8 @@ def output_vimscript_highlight_defaults(syntax_tree_path: Path) -> None:
 def output_error_labels_defined() -> None:
     """
     Output a list of error-related group names
-    :rtype: None
+    :return: None
+    :rtype: `None`
     """
     output_vimscript_comment(' Error Handlers encountered')
     for this_error_handler in target_error_defined:
@@ -145,9 +168,9 @@ def any_child_node_exists(node_path: Path) -> bool:
     """
     Check a node if any child node exists.
     :param node_path: a filepath to a node
-    :ptype path: Path
+    :type path: `Path`
     :return: Returns True if a child node exists.
-    :rtype: bool
+    :rtype: `bool`
     """
     found = False
     for this_child in node_path.iterdir():
@@ -163,9 +186,9 @@ def any_block_related_child_node_exists(node_path: Path) -> bool:
     """
     Check a node if any block-related child node exists.
     :param node_path: a filepath to a node
-    :ptype path: Path
+    :type path: `Path`
     :return: Returns True if a child node exists.
-    :rtype: bool
+    :rtype: `bool`
     """
     found = False
     for this_child in node_path.iterdir():
@@ -181,8 +204,9 @@ def process_terminal_token_end_node(symbol_name: str) -> None:
     """
     We are at the terminal end of a "AST"; process end-node.
     :param symbol_name: group name
-    :ptype symbol_name: str
-    :rtype: None
+    :type symbol_name: `str`
+    :return: None
+    :rtype: `None`
     """
     #    print("  File: %s" % entry.name)
     #    print("  Stack: %s" % [p.name for p in stack])  # Debug: show full stack
@@ -193,10 +217,11 @@ def output_vimscript_highlight(symbol_name: str, highlight_link_label: str) -> N
     """
     Generate a Vimscript highlight command
     :param symbol_name: The group name to be highlighted.
-    :ptype symbol_name: str
+    :type symbol_name: `str`
     :param highlight_link_label:
-    :ptype highlight_link_label: str
-    :rtype: None
+    :type highlight_link_label: `str`
+    :return: None
+    :rtype: `None`
     """
     global target_file_format
 
@@ -213,17 +238,18 @@ def output_vimscript_syn_match(stack: Deque[Path], path: Path, group_name: str, 
                                non_terminal: bool) -> None:
     """
 
-    :param stack:
-    :ptype stack: Deque[Path]
-    :param path:
-    :ptype path: Path
-    :param group_name:
-    :ptype group_name: str
-    :param node_options:
-    :ptype node_options: Dict[str, Any]
-    :param non_terminal:
-    :ptype non_terminal: bool
-    :rtype: None
+    :param stack: a stack of Path objects representing the current traversal path
+    :type stack: `Deque[Path]`
+    :param path: a filepath to a node
+    :type path: `Path`
+    :param group_name: The group name to be highlighted.
+    :type group_name: `str`
+    :param node_options: options from .config.ini file
+    :type node_options: `Dict[str, Any]`
+    :param non_terminal: True if non-terminal node, False if terminal node
+    :type non_terminal: `bool`
+    :return: None
+    :rtype: `None`
     """
     # Use default
     pattern = '\\v' + path.name
@@ -261,12 +287,13 @@ def output_vimscript_syn_match(stack: Deque[Path], path: Path, group_name: str, 
 
 def output_vimscript_nextgroup(path: Path, group_name: str) -> None:
     """
-    Output the 'nextgroup=' and all its group names.
-    :param path:
-    :ptype path: Path
-    :param group_name:
-    :ptype group_name: str
-    :rtype: None
+    Output the 'nextgroup=' and all its group names. If no child nodes, then no 'nextgroup='
+    :param path: a filepath to a node
+    :type path: `Path`
+    :param group_name: The group name to be highlighted.
+    :type group_name: `str`
+    :return: None
+    :rtype: `None`
     """
     if any_child_node_exists(path):
         print("\\ nextgroup=")
@@ -283,9 +310,10 @@ def output_vimscript_nextgroup(path: Path, group_name: str) -> None:
 def output_vimscript_nextgroup_error_handlers(error_options: Dict[str, Any]) -> None:
     """
     Fill out the end of Vimscript syntax 'nextgroup=' with more Error Handlers
-    :param error_options:
-    :ptype error_options: Dict[str, Any]
-    :rtype: None
+    :param error_options: options from .config.ini file
+    :type error_options: `Dict[str, Any]`
+    :return: None
+    :rtype: `None`
     """
     global target_symbol_prefix
 
@@ -317,13 +345,14 @@ def output_vimscript_nextgroup_error_handlers(error_options: Dict[str, Any]) -> 
 def process_node_nonterminal(path: Path, symbol_name: str, stack: Deque[Path]) -> None:
     """
     Process non-terminal node into a Vimscript group name and emit appropriate Vimscript syntax statements.
-    :param path:
-    :type path: Path
-    :param symbol_name:
-    :type symbol_name: str
-    :param stack:
-    :type stack: object
-    :rtype: None
+    :param path: a filepath to a node
+    :type path: `Path`
+    :param symbol_name: The group name to be highlighted.
+    :type symbol_name: `str`
+    :param stack: a stack of Path objects representing the current traversal path
+    :type stack: `Deque[Path]`
+    :return: None
+    :rtype: `None`
     """
     #    print("  File: %s" % entry)
     #    print("  Stack: %s" % [p.name for p in stack])  # Debug: show full stack
@@ -347,13 +376,14 @@ def process_node_nonterminal(path: Path, symbol_name: str, stack: Deque[Path]) -
 def process_end_node_terminal(path: Path, symbol_name: str, stack: Deque[Path]) -> None:
     """
 
-    :param path:
-    :ptype path: Path
-    :param symbol_name:
-    :ptype symbol_name: str
-    :param stack:
-    :ptype stack: Deque[Path]
-    :rtype: None
+    :param path: a filepath to a node
+    :type path: `Path`
+    :param symbol_name: The group name to be highlighted.
+    :type symbol_name: `str`
+    :param stack: a stack of Path objects representing the current traversal path
+    :type stack: `Deque[Path]`
+    :return: None
+    :rtype: `None`
     """
     node_options = parse_simple_ini.get_node_options(path)
     if node_options:
@@ -376,23 +406,23 @@ def process_end_node_terminal(path: Path, symbol_name: str, stack: Deque[Path]) 
 def start_directory_traverse(start_dirpath: Path, hidden_prefix: str, prefix: str = 'nft_') -> None:
     """
 
-    :param start_dirpath:
-    :ptype start_dirpath: Path
-    :param hidden_prefix:
-    :ptype hidden_prefix: str
-    :param prefix:
-    :ptype prefix: str
-    :rtype: None
+    :param start_dirpath: Path to the root of syntax tree
+    :type start_dirpath: `Path`
+    :param hidden_prefix: a prefix for hidden files
+    :type hidden_prefix: `str`
+    :param prefix: a prefix for the highlight group names
+    :type prefix: `str`
     :return: None
+    :rtype: `None`
     """
 
     def traverse_recursively(path: Path, stack: Deque[Path] = deque()) -> None:
         """
         Traverse the directory tree, that is used for an abstract syntax tree
-        :param path:
-        :ptype path: Path
-        :param stack:
-        :ptype stack: Deque[Path]
+        :param path: a filepath to a node
+        :type path: `Path`
+        :param stack: a stack of Path objects representing the current traversal path
+        :type stack: `Deque[Path]`
         :rtype: None
         """
         stack.append(path)
@@ -442,12 +472,13 @@ def start_directory_traverse(start_dirpath: Path, hidden_prefix: str, prefix: st
 def parse_args() -> Namespace:
     """
     Parse the command line interface for any user-supplied arguments.
-    :rtype: None
+    :return: None
+    :rtype: `None`
     """
     parser = argparse.ArgumentParser(description='Process input and output files.')
     parser.add_argument('-f', '--file-type', metavar='filetype', type=str, required=True, help='Type of file format')
     parser.add_argument('-b', '--base-path', metavar='one-syntax_dir_spec', type=Path, required=False,
-                        default=CORPUS_SYNTAX_TREE_DIRPATH, help='Base directory path (default is $CWD)')
+                        default=".", help='Base directory path (default is $CWD)')
     parser.add_argument('-c', '--corpus', metavar='corpus_dir_spec', type=Path, required=False,
                         help='Directory to corpus of syntax tree')
     parser.add_argument('-t', '--template', metavar='template_dir_spec', type=Path, required=False,
