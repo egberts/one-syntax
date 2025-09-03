@@ -1,7 +1,8 @@
 """
 The Right Stuff
 """
-from argparse import ArgumentTypeError
+import argparse
+from argparse import Namespace
 from collections import deque
 from collections.abc import Sized
 from pathlib import Path
@@ -10,17 +11,17 @@ from typing import cast, Set, Dict, Optional, Any, Deque, List, Tuple
 import construct_symbol_name
 import parse_simple_ini
 
-
-target_symbol_prefix:str  = ''
-target_file_format:str  = ''
-TARGET_EDITOR_PLATFORM:str = 'vim'
+target_symbol_prefix: str = ''
+target_file_format: str = ''
+TARGET_EDITOR_PLATFORM: str = 'vim'
 target_error_defined: List[Tuple[str, str, str]] = []
-target_highlights_found: Set[Optional[str]] = set()
+target_highlights_found: Set[Tuple[str, str, str]] = set()
 target_highlights_printed = []
-target_corpus_fileformat_tree_dirpath:Path = Path('.')
+target_corpus_fileformat_tree_dirpath: Path = Path('.')
 
 # Define pathspec for directory traversal
 CORPUS_SYNTAX_TREE_DIRPATH = '/home/wolfe/work/github/one-syntax/'
+
 
 def is_root_node(stack: Sized) -> bool:
     """
@@ -32,6 +33,7 @@ def is_root_node(stack: Sized) -> bool:
     if len(stack) == 1:
         return True
     return False
+
 
 def output_vimscript_comment(comment_line: str) -> None:
     """
@@ -58,20 +60,30 @@ def output_highlights_found() -> None:
             group_name = this_highlight[0]
             label_name = this_highlight[1]
             referenced_by = this_highlight[2]
-            output_vimscript_comment('  Highlight \'' + group_name +  '\' referenced by ' + referenced_by)
+            output_vimscript_comment('  Highlight \'' + group_name + '\' referenced by ' + referenced_by)
             if any(group_name not in item[0] for item in have_target_highlights):
                 print('highlight link ' + group_name + ' ' + label_name)
 
+
 def output_vimscript_highlight_defaults(syntax_tree_path: Path) -> None:
+    """
+
+    :param syntax_tree_path:
+    :ptype syntax_tree_path: Path
+    :rtype: None
+    """
 
     def collect_all_highlights(syntax_tree: Path) -> Set[Optional[str]]:
         """
         Read a specific key from all '.config.ini' files in subdirectories.
         Handles non-standard INI files without sections.
         Returns a dictionary mapping file paths to the key's value (or None if not found).
-        :return:
+        :param syntax_tree: Path to the root of syntax tree
+        :ptype syntax_tree: Path
+        :return:   A set of generic highlight labels
+        :rtype: Set[Optional[str]]
         """
-        key_name:str = "highlight_color_name"
+        key_name: str = "highlight_color_name"
         set_of_default_highlights: Set[Optional[str]] = set()
 
         # Find all .config.ini files in subdirectories
@@ -95,6 +107,14 @@ def output_vimscript_highlight_defaults(syntax_tree_path: Path) -> None:
         return set_of_default_highlights
 
     def output_highlight_default_links_found(default_highlights: Set[str], prefix: str) -> None:
+        """
+        Output the default highlight links used in this syntax tree.
+        :param default_highlights: a set of highlight labels
+        :ptype default_highlights: Set[str]
+        :param prefix: the symbol name prefix
+        :ptype prefix: str
+        :rtype: None
+        """
         for this_hi in default_highlights:
             system_highlight = this_hi
             highlight_prefix = prefix.rstrip('_') + 'HL_'
@@ -138,6 +158,7 @@ def any_child_node_exists(node_path: Path) -> bool:
                 break
     return found
 
+
 def any_block_related_child_node_exists(node_path: Path) -> bool:
     """
     Check a node if any block-related child node exists.
@@ -168,12 +189,13 @@ def process_terminal_token_end_node(symbol_name: str) -> None:
     output_vimscript_comment("End-node Terminal Symbol Name (file): %s" % symbol_name)
 
 
-
 def output_vimscript_highlight(symbol_name: str, highlight_link_label: str) -> None:
     """
     Generate a Vimscript highlight command
-    :param symbol_name: The group name to be highlighted
+    :param symbol_name: The group name to be highlighted.
+    :ptype symbol_name: str
     :param highlight_link_label:
+    :ptype highlight_link_label: str
     :rtype: None
     """
     global target_file_format
@@ -183,16 +205,24 @@ def output_vimscript_highlight(symbol_name: str, highlight_link_label: str) -> N
     print("highlight link %s %s" % (symbol_name, group_name))
     # print("highlight link %s %s" % (group_name, highlight_link_label))
     # track all highlight group names for later output
-    target_highlights_found.add((group_name, highlight_link_label, symbol_name))
+    my_tuple: Tuple[str, str, str] = (group_name, highlight_link_label, symbol_name)
+    target_highlights_found.add(my_tuple)
 
 
-def output_vimscript_syn_match(stack: Deque[Path], path: Path, group_name: str, node_options: Dict[str, Any], non_terminal: bool) -> None:
+def output_vimscript_syn_match(stack: Deque[Path], path: Path, group_name: str, node_options: Dict[str, Any],
+                               non_terminal: bool) -> None:
     """
 
+    :param stack:
+    :ptype stack: Deque[Path]
     :param path:
+    :ptype path: Path
     :param group_name:
+    :ptype group_name: str
     :param node_options:
+    :ptype node_options: Dict[str, Any]
     :param non_terminal:
+    :ptype non_terminal: bool
     :rtype: None
     """
     # Use default
@@ -201,8 +231,6 @@ def output_vimscript_syn_match(stack: Deque[Path], path: Path, group_name: str, 
     # 'skipwhite' Vimscript syntax option is mostly useless here (only does '\s*' or not)
     # for a deterministic syntax pathway, we default to 'atleastwhitespace' '\s+', so we do this in regex
     if node_options:
-
-
         if 'pattern' in node_options:
             option_pattern: str = node_options['pattern']
             regex_pattern = option_pattern
@@ -233,9 +261,11 @@ def output_vimscript_syn_match(stack: Deque[Path], path: Path, group_name: str, 
 
 def output_vimscript_nextgroup(path: Path, group_name: str) -> None:
     """
-
+    Output the 'nextgroup=' and all its group names.
     :param path:
+    :ptype path: Path
     :param group_name:
+    :ptype group_name: str
     :rtype: None
     """
     if any_child_node_exists(path):
@@ -247,20 +277,18 @@ def output_vimscript_nextgroup(path: Path, group_name: str) -> None:
             this_keyword = this_filename.name
             this_symbol_name = construct_symbol_name.convert(group_name, this_keyword)
             this_group_name = group_name + '_' + this_symbol_name
-            print("\\    %s," % this_group_name)
-        # output the length-lexical sort order of group names
+            print("\\    %s," % this_group_name)  # output the length-lexical sort order of group names
 
-
-from typing import Dict, Any
 
 def output_vimscript_nextgroup_error_handlers(error_options: Dict[str, Any]) -> None:
     """
-
+    Fill out the end of Vimscript syntax 'nextgroup=' with more Error Handlers
     :param error_options:
+    :ptype error_options: Dict[str, Any]
     :rtype: None
     """
     global target_symbol_prefix
-    
+
     if not error_options:
         print('\\    nft_Error')
         return
@@ -271,7 +299,7 @@ def output_vimscript_nextgroup_error_handlers(error_options: Dict[str, Any]) -> 
     #  new_line,end_of_statement,start_block_delimiter,end_block_delimiter,equal,start_parenthesis,end_parenthesis,slash,at_symbol,dot,comma,colon,plus,dash,asterisk
 
     list_of_foto = follow_on_to_only.split(',')
-    # concatenate a list of anti-pattern firstly
+    # concatenate a list of antipattern firstly
 
     if 'equal' in list_of_foto:
         list_of_foto.remove('equal')
@@ -279,22 +307,18 @@ def output_vimscript_nextgroup_error_handlers(error_options: Dict[str, Any]) -> 
         new_error_group_name = target_symbol_prefix + 'Error_equal_not_found'
         print('\\    %s' % new_error_group_name)
         final_antipattern = r'\v[^' + add_on_pattern + ']'
-        target_error_defined.append((new_error_group_name, add_on_pattern, final_antipattern))
-        #print('error_defined (running): ', errors_defined)
+        target_error_defined.append((new_error_group_name, add_on_pattern,
+                                     final_antipattern))  # print('error_defined (running): ', errors_defined)
     # TODO: construct unique error handler
     if not not list_of_foto:
         print('" WARNING: remaining unprogrammed follow_on_to_only options: ', list_of_foto)
 
 
-def process_node_nonterminal(parent_path: Path, path: Path, parent_symbol_name: str, symbol_name: str, stack: object) -> None:
+def process_node_nonterminal(path: Path, symbol_name: str, stack: Deque[Path]) -> None:
     """
-
-    :param parent_path:
-    :type parent_path: Path
+    Process non-terminal node into a Vimscript group name and emit appropriate Vimscript syntax statements.
     :param path:
     :type path: Path
-    :param parent_symbol_name:
-    :type parent_symbol_name: str
     :param symbol_name:
     :type symbol_name: str
     :param stack:
@@ -320,14 +344,15 @@ def process_node_nonterminal(parent_path: Path, path: Path, parent_symbol_name: 
     output_vimscript_comment('')
 
 
-def process_end_node_terminal(parent_path: Path, path: Path, parent_symbol_name: str, symbol_name: str, stack: object) -> None:
+def process_end_node_terminal(path: Path, symbol_name: str, stack: Deque[Path]) -> None:
     """
 
-    :param parent_symbol_name:
-    :param parent_path:
     :param path:
+    :ptype path: Path
     :param symbol_name:
+    :ptype symbol_name: str
     :param stack:
+    :ptype stack: Deque[Path]
     :rtype: None
     """
     node_options = parse_simple_ini.get_node_options(path)
@@ -339,7 +364,7 @@ def process_end_node_terminal(parent_path: Path, path: Path, parent_symbol_name:
             output_vimscript_comment("(default pattern used)")
     else:
         output_vimscript_comment("Terminal symbol (dir): " + symbol_name)
-        
+
     # There is a loop here for multiple patterns using exact same group name
     output_vimscript_comment(str(path))
     if 'highlight_color_name' in node_options:
@@ -351,18 +376,23 @@ def process_end_node_terminal(parent_path: Path, path: Path, parent_symbol_name:
 def start_directory_traverse(start_dirpath: Path, hidden_prefix: str, prefix: str = 'nft_') -> None:
     """
 
-    :return: None
     :param start_dirpath:
+    :ptype start_dirpath: Path
     :param hidden_prefix:
+    :ptype hidden_prefix: str
     :param prefix:
+    :ptype prefix: str
     :rtype: None
+    :return: None
     """
 
-    def traverse_recursively(path: Path, stack = deque()) -> None:
+    def traverse_recursively(path: Path, stack: Deque[Path] = deque()) -> None:
         """
-
+        Traverse the directory tree, that is used for an abstract syntax tree
         :param path:
+        :ptype path: Path
         :param stack:
+        :ptype stack: Deque[Path]
         :rtype: None
         """
         stack.append(path)
@@ -386,13 +416,12 @@ def start_directory_traverse(start_dirpath: Path, hidden_prefix: str, prefix: st
 
                     # Lookahead for not non-terminal (terminal) node
                     if any_child_node_exists(entry):
-                        process_node_nonterminal(path, entry, full_symbol_name, entry_symbol_name, stack)
+                        process_node_nonterminal(entry, entry_symbol_name, stack)
                     else:
-                        process_end_node_terminal(path, entry, full_symbol_name, entry_symbol_name, stack)
+                        process_end_node_terminal(entry, entry_symbol_name, stack)
                 elif entry.is_file():
-                    raise NotADirectoryError('Not sure what to do with this file', entry, ": try cd into directory containing 'syntax-tree'")  # not sure
-                    full_symbol_name = construct_symbol_name.get_file(stack, path.name, prefix)
-                    process_terminal_token_end_node(full_symbol_name)
+                    raise NotADirectoryError('Not sure what to do with this file', entry,
+                                             ": try cd into directory containing 'syntax-tree'")  # not sure  # full_symbol_name = construct_symbol_name.get_file(stack, path.name, prefix)  # process_terminal_token_end_node(full_symbol_name)
 
         except PermissionError:
             print("  Permission denied: %s" % path.name)
@@ -407,27 +436,29 @@ def start_directory_traverse(start_dirpath: Path, hidden_prefix: str, prefix: st
         print("Path %s is not a directory; aborted." % start_path.name)
         return
 
-    traverse_recursively(start_path)
-    # last node traversed here, what's next?
+    traverse_recursively(start_path)  # last node traversed here, what's next?
 
 
-import argparse
-
-def parse_args():
+def parse_args() -> Namespace:
+    """
+    Parse the command line interface for any user-supplied arguments.
+    :rtype: None
+    """
     parser = argparse.ArgumentParser(description='Process input and output files.')
     parser.add_argument('-f', '--file-type', metavar='filetype', type=str, required=True, help='Type of file format')
-    parser.add_argument('-b', '--base-path', metavar='one-syntax_dir_spec', type=Path, required=False, default=CORPUS_SYNTAX_TREE_DIRPATH, help='Base directory path (default is $CWD)')
-    parser.add_argument('-c', '--corpus', metavar='corpus_dir_spec', type=Path, required=False, help='Directory to corpus of syntax tree')
-    parser.add_argument('-t', '--template', metavar='template_dir_spec', type=Path, required=False, help='Template file path')
+    parser.add_argument('-b', '--base-path', metavar='one-syntax_dir_spec', type=Path, required=False,
+                        default=CORPUS_SYNTAX_TREE_DIRPATH, help='Base directory path (default is $CWD)')
+    parser.add_argument('-c', '--corpus', metavar='corpus_dir_spec', type=Path, required=False,
+                        help='Directory to corpus of syntax tree')
+    parser.add_argument('-t', '--template', metavar='template_dir_spec', type=Path, required=False,
+                        help='Template file path')
     parser.add_argument('-o', '--output', metavar='output_dir_spec', type=Path, required=False, help='Output file path')
     parser.add_argument('-v', '--verbose', action='store_true', required=False, help='Verbosity level')
-    parser.add_argument(
-        '-V', '--version',
-        action='version',
-        version='%(prog)s 1.0.0',
-        help="Show program's version number and exit."
-    )
-    return parser.parse_args()
+    parser.add_argument('-V', '--version', action='version', version='%(prog)s 1.0.0',
+        help="Show program's version number and exit.")
+    what_type = parser.parse_args()
+    return what_type
+
 
 def main() -> None:
     """
@@ -439,7 +470,7 @@ def main() -> None:
     target_symbol_prefix = ''
     args = parse_args()
     if args.file_type is None:
-        raise ArgumentTypeError("--file-type argument must be defined")
+        raise argparse.ArgumentTypeError("--file-type argument must be defined")
     else:
         target_file_format = args.file_type
 
@@ -447,8 +478,8 @@ def main() -> None:
     # $CWD are not to be changed and expected to be in 'one-syntax' subdirectroy by default, otherwise use '-b' option
     base_dirpath = Path.cwd()
     template_dirpath_relative = Path('templates')  # option '-t'
-    corpus_dirpath_relative = Path('corpus')    # option '-c'
-    output_dirpath_relative = Path('output')    # option '-o'
+    corpus_dirpath_relative = Path('corpus')  # option '-c'
+    output_dirpath_relative = Path('output')  # option '-o'
 
     # Obtain user-supplied basepath (either in relative/absolute path)
     if args.base_path:
@@ -462,21 +493,21 @@ def main() -> None:
     else:
         corpus_dirpath = corpus_dirpath_relative
     if not corpus_dirpath.is_dir():
-        raise ArgumentTypeError('Corpus \'' + str(corpus_dirpath) + '\' is not a subdirectory')
+        raise argparse.ArgumentTypeError('Corpus \'' + str(corpus_dirpath) + '\' is not a subdirectory')
 
     if args.template:
         template_dirpath = args.template
     else:
         template_dirpath = template_dirpath_relative
     if not template_dirpath.is_dir():
-        raise ArgumentTypeError('Template \'' + str(template_dirpath) + '\' is not a subdirectory')
+        raise argparse.ArgumentTypeError('Template \'' + str(template_dirpath) + '\' is not a subdirectory')
 
     if args.output:
         output_dirpath = args.output
     else:
         output_dirpath = output_dirpath_relative
     if not output_dirpath.is_dir():
-        raise ArgumentTypeError('Output \'' + str(output_dirpath) + '\' is not a subdirectory')
+        raise argparse.ArgumentTypeError('Output \'' + str(output_dirpath) + '\' is not a subdirectory')
 
     # Map out remaining tree pathways (noticed no '_relative' nor absolute notation)
     corpus_fileformat_dirpath = corpus_dirpath / Path(target_file_format)
@@ -492,9 +523,10 @@ def main() -> None:
 
     # set our first global options
     options = parse_simple_ini.get_main_options(corpus_fileformat_tree_dirpath)
-    opt_prefix: (str|None) = options.get('symbol_name_prefix')
+    opt_prefix: (str | None) = options.get('symbol_name_prefix')
     if opt_prefix is None:
-        raise ValueError(f"Missing required main option 'symbol_name_prefix' in {corpus_fileformat_tree_dirpath}/.config.main.ini config file.")
+        raise ValueError(
+            f"Missing required main option 'symbol_name_prefix' in {corpus_fileformat_tree_dirpath}/.config.main.ini config file.")
     else:
         target_symbol_prefix = opt_prefix
     target_file_format = target_symbol_prefix.rstrip('_')
@@ -517,7 +549,6 @@ def main() -> None:
 
     output_error_labels_defined()
 
+
 if __name__ == '__main__':
     main()
-
-

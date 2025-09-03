@@ -7,9 +7,10 @@ from typing import Dict
 
 def read(file_path: pathlib.Path) -> Dict[str, str]:
     """
+    Reads a simple INI-style configuration file and returns its contents as a dictionary.
 
-    :param file_path:
-    :return:
+    :param file_path: Path to the configuration file.
+    :return: Dictionary containing key-value pairs from the file.
     """
     config: Dict[str, str] = {}
     try:
@@ -18,13 +19,12 @@ def read(file_path: pathlib.Path) -> Dict[str, str]:
                 line = line.strip()
                 if not line or line.startswith(('#', ';')):
                     continue
-                if '=' not in line:
+                    continue  # Skip malformed lines (lines without '=' separating key and value)
                     continue  # Skip malformed lines
                 key, value = line.split('=', 1)
                 config[key.strip()] = value.strip()
     except FileNotFoundError:
-        pass
-        # print(f"File '{file_path}' not found.")
+        raise FileNotFoundError(f"File '{file_path}' not found.")
     return config
 
 

@@ -11,7 +11,7 @@ import re
 import logging
 import pathlib
 from collections.abc import Sequence
-from typing import Any, List
+from typing import Any, List, Deque
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -51,36 +51,23 @@ def get_dir_stackless(syntax_root_path: pathlib.Path, file_path: pathlib.Path, p
     Returns:
         A valid snake_case variable name.
     """
-
-    from typing import List
-    from pathlib import Path
-    import re
-    from typing import Optional
-    names: List[str] = []
-    parent_name = ''
-
     # Sample path and special conversions
     special_conversions: dict[str, str] = {
         "sub-dir": "subdir",  # Replace 'sub-dir' with 'subdir'
         "config.ini": "config"  # Replace 'config.ini' with 'config'
     }
-    if special_conversions is None:
-        special_conversions = {}
     # Convert to Path object and get all parts (excluding root '/')
     # Remove top n directories ("corpus/ini/syntax-tree")
-    absolute_file_path = file_path.absolute()
-    absolute_syntax_root_path = syntax_root_path.absolute()
     # Remove root path
     try:
         relative_path = file_path.relative_to(syntax_root_path)
     except ValueError:
         relative_path = file_path  # Fallback if path is not under root
-    num_levels = 0
     print(f'parts: {file_path.parts}')
     parts = list(relative_path.parts)[1:] if relative_path.is_absolute() else relative_path.parts
 
     # Process each part
-    valid_parts = []
+    valid_parts: List[str] = []
     parent_part = ''
     for part in parts:
         # Apply special conversion if exists
@@ -115,7 +102,7 @@ def get_dir_stackless(syntax_root_path: pathlib.Path, file_path: pathlib.Path, p
     return variable_name
 
 
-def get_dir(stack: Sequence[Any], prefix: str) -> str:
+def get_dir(stack: Deque[pathlib.Path], prefix: str) -> str:
     """
     Construct a snake_case symbol/group name string from a parsing stack.
 
